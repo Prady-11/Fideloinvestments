@@ -1,0 +1,112 @@
+ Portfolio Constraint & AI Explanation Engine
+Assignment ID: FF26A1
+
+This is a quantitative pipeline for building portfolios that applies high-level risk limits across 100 investment strategies over 26 years. It includes an AI-driven explanation engine for analyzing portfolios.
+
+
+
+## What This Does
+
+It takes raw investment rule portfolios and applies two strict limits to every (strategy × year) cell. You can then ask questions about any portfolio through a conversational AI interface.
+
+**Input** → 100 strategies × 26 years of stock lists (150,000+ positions across 1,514 unique equities)  
+**Output** → Constrained portfolios, a full audit log, and an AI explanation interface
+
+---
+
+## Constraints Applied
+
+### 1. MCap Filter
+- For each year, calculate the **20th-percentile MCap threshold** from a universe of around 9,000 companies.
+- Remove any stock from the portfolio with **missing MCap** for that year.
+- Remove any stock whose MCap is **below the threshold**.
+- The threshold applies to the market as a whole, not just the portfolio, which matches how institutional quant teams set liquidity screens.
+
+### 2. Sector Exposure Cap
+- After the MCap filter, no single sector can have more than **floor(25% × portfolio size)** stocks.
+- To meet this limit, repeatedly remove the **lowest-MCap stock** from the sector causing the issue.
+- Reassess after each removal, as the cap will change.
+- Stocks without sector data are categorized as "Unknown" and counted toward their own cap.
+
+---
+
+## Files
+
+| File | Description |
+|---|---|
+| `portfolio_constraint.py` | Main constraint engine that runs all 100 strategies |
+| `portfolio_explanation.py` | AI explanation interface using LangChain and Gemini |
+| `missing_mcap_log.py` | Script to log all exclusions due to missing MCap |
+| `output.csv` | Constrained portfolios (same structure as input) |
+| `constraint_log.csv` | List of every removed stock and its reason |
+| `missing_mcap_log.csv` | Stocks removed due to missing MCap data |
+
+---
+
+## How to Run
+
+### Step 1: Constraint Engine
+```bash
+# Place all input CSVs in the same folder, then:
+python portfolio_constraint.py
+```
+This generates `output.csv` and `constraint_log.csv`.
+
+### Step 2: Missing MCap Log (optional)
+```bash
+python missing_mcap_log.py
+```
+This produces `missing_mcap_log.csv`.
+
+### Step 3: AI Explanation
+```bash
+pip install langchain-google-genai python-dotenv
+```
+
+Create a `.env` file:
+```
+GOOGLE_API_KEY=your_key_here
+```
+
+Run:
+```bash
+python portfolio_explanation.py
+```
+
+Enter a strategy index (0–99) and a year (1999–2022). Then you can ask:
+- "Explain sector concentration."
+- "Explain MCap distribution."
+- "Give a brief portfolio risk commentary."
+
+---
+
+## AI Design Decisions
+
+- No raw files are sent to the LLM to prevent token limit issues with large CSVs.
+- A pre-computed dictionary `{company: [mcap, sector]}` is used as context, which is clean, compact, and around 30 lines long.
+- The context is injected only once in the first message; later turns rely on the conversation history.
+- An anti-hallucination system prompt ensures that if you ask about data not in the dictionary, the model will admit it instead of making things up.
+
+---
+
+## Results
+
+| Metric | Value |
+|---|---|
+| Strategies processed | 100 |
+| Years covered | 1999 - 2022 (26 years) |
+| Total positions processed | 150,163 |
+| Positions after constraints | 149,782 |
+| Total exclusions | 381 |
+| Removed by sector cap | 325 |
+| Removed for missing MCap | 56 |
+
+---
+
+## Input Files Required
+
+| File | Description |
+|---|---|
+| `assignment_investment_rules.csv` | 100 strategies × 26 years, each cell contains a list of stocks |
+| `assignment_sector_data.csv` | Company to sector mapping |
+| `assignment_mcap.csv` | Company × year MCap data (₹ cr) |
